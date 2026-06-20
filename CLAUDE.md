@@ -45,18 +45,60 @@ Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
 
 ## Review & QA Logs
 
-2026-06-20:
-- /autoplan — CEO review (5 findings) + Eng review (13 findings). Design doc updated with audit trail + review report.
-- /review — 18 adversarial findings, 12 fixed. Files: server.js, index.html, .gitignore
-- /qa — health score 92/100, core flows verified, ISSUE-001 (?view=history routing) fixed
+### 2026-06-20 — 设备巡检登记表 v1
+
+| 时间 | 技能 | 结果 | 详情 |
+|------|------|------|------|
+| 09:20 | /office-hours | 设计文档已批准 | 3个前提确认，方案 A + sync 选定 |
+| 09:35 | /autoplan | CEO + Eng 评审通过 | CEO 5发现，Eng 13发现。见设计文档 ## GSTACK REVIEW REPORT |
+| 09:39 | /spec | 规格归档 | 14/14 质量门通过。见 `specs/20260620-093301-1692--v1.md` |
+| 09:42 | 写代码 | feat commit | server.js (231行) + index.html (697行) + package.json |
+| 09:49 | /review | 12项修复 | 18项对抗性发现，12项自动修复（commit `c09199a`） |
+| 09:54 | /qa | 健康分 92 | 14项测试通过，1项bug修复（commit `3a78c95`） |
+
+**修复详情：**
+
+/review 修复（commit `c09199a`）：
+- CORS 通配符 → 显式 origin 策略
+- express.static 暴露源码 → 仅显式提供 index.html  
+- HOST 默认 0.0.0.0 → 127.0.0.1
+- 巡检人姓名加格式校验 + 50字符上限
+- note 截断 Unicode 安全
+- 服务器端加唯一性约束防重复
+- IndexedDB 写入和 fetch 间 race condition 修复
+- retry 去重键加 status 字段
+- retry 循环断点修复
+- formatTime 时区处理修复
+- API 速率限制
+- .gitignore 加 package-lock.json
+
+/qa 修复（commit `3a78c95`）：
+- `?view=history` 直接导航不自动切换到历史视图
+
+/qa 遗留（低优先级）：
+- 状态药丸缺少 ARIA 角色（无障碍）
+- 历史页初始化时偶发 500（浏览器重试瞬态）
+
+**制品位置：**
+- 设计文档：`~/.gstack/projects/equipment-inspection-form/cheng-master-design-20260620-090909.md`
+- 规格归档：`~/.gstack/projects/equipment-inspection-form/specs/20260620-093301-1692--v1.md`
+- QA 报告：`.gstack/qa-reports/qa-report-localhost-2026-06-20.md`
+- 评审日志：`gstack-review-read` 可查 6 条记录
 
 ## Spec
 
-2026-06-20: /spec - 14/14 quality standards passed. Spec archived at ~/.gstack/projects/equipment-inspection-form/specs/
+2026-06-20: /spec — 14/14 quality standards passed
+文件路径: ~/.gstack/projects/equipment-inspection-form/specs/20260620-093301-1692--v1.md
+内容: 完整 schema (SQL DDL), API contract (POST/GET), 表单验证规则, 安全措施,
+11 条验收标准, 测试计划, 部署步骤, Out of Scope 列表
 
 ## Design Doc
 
-2026-06-20: /office-hours → design doc at ~/.gstack/projects/equipment-inspection-form/cheng-master-design-20260620-090909.md
+2026-06-20: /office-hours — 设计文档 + /autoplan 追加评审报告
+文件路径: ~/.gstack/projects/equipment-inspection-form/cheng-master-design-20260620-090909.md
+内容: Problem Statement, 3个前提, 3个方案对比 (A/B/C), 推荐方案 A + sync,
+Architecture Updates from /autoplan (P0/P1/P2/P3), Decision Audit Trail (16条),
+GSTACK REVIEW REPORT (CEO 5发现 + Eng 13发现)
 
 ## Skill routing
 
