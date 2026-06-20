@@ -39,6 +39,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_inspections_inspector ON inspections(inspector);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_inspections_dedup
     ON inspections(device_id, inspector, client_created_at);
+
+  CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id TEXT NOT NULL,
+    triggered_inspection_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at TEXT,
+    resolved_by TEXT,
+    FOREIGN KEY (triggered_inspection_id) REFERENCES inspections(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_alerts_device ON alerts(device_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_active ON alerts(device_id) WHERE resolved_at IS NULL;
 `);
 
 console.log('SQLite WAL mode ready, schema ensured.');
@@ -66,6 +78,38 @@ const stmtQueryDevice = db.prepare(`
 
 const stmtQueryCount = db.prepare('SELECT COUNT(*) as total FROM inspections');
 const stmtQueryCountDevice = db.prepare('SELECT COUNT(*) as total FROM inspections WHERE device_id = ?');
+
+// --- Alert prepared statements ---
+const stmtCheckConsecutive = db.prepare(`
+  WITH ranked AS (
+    SELECT id, device_id, status,
+      ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
+    FROM inspections
+    WHERE device_id = ?
+  )
+  SELECT * FROM ranked WHERE rn <= 2
+`);
+
+const stmtCheckActiveAlert = db.prepare(`
+  SELECT id FROM alerts WHERE device_id = ? AND resolved_at IS NULL
+`);
+
+const stmtInsertAlert = db.prepare(`
+  INSERT INTO alerts (device_id, triggered_inspection_id) VALUES (?, ?)
+`);
+
+const stmtQueryAlerts = db.prepare(`
+  SELECT a.id, a.device_id, a.created_at,
+    i.status, i.inspector, i.note, i.created_at as triggered_at
+  FROM alerts a
+  JOIN inspections i ON i.id = a.triggered_inspection_id
+  WHERE a.resolved_at IS NULL
+  ORDER BY a.created_at DESC
+`);
+
+const stmtResolveAlert = db.prepare(`
+  UPDATE alerts SET resolved_at = datetime('now'), resolved_by = ? WHERE id = ?
+`);
 
 // --- Express app ---
 const app = express();
@@ -169,6 +213,16 @@ if (!inspector || typeof inspector !== 'string' || !inspector.trim() || !inspect
 
     const row = db.prepare('SELECT id, created_at FROM inspections WHERE id = ?').get(result.lastInsertRowid);
 
+    // Auto-trigger alert: check if last 2 inspections for this device are both "异常"
+    const recentTwo = stmtCheckConsecutive.all(device_id);
+    if (recentTwo.length === 2 && recentTwo.every(r => r.status === '异常')) {
+      const existingAlert = stmtCheckActiveAlert.get(device_id);
+      if (!existingAlert) {
+        // recentTwo[0] has rn=1, which is the most recent (just inserted)
+        stmtInsertAlert.run(device_id, recentTwo[0].id);
+      }
+    }
+
     res.status(201).json({
       id: row.id,
       created_at: row.created_at
@@ -237,6 +291,55 @@ app.get('/api/inspections', (req, res) => {
       error: 'internal_error',
       message: '服务器内部错误，请重试'
     });
+  }
+});
+
+// GET /api/alerts — list alerts, optional ?status=active for unresolved
+app.get('/api/alerts', (req, res) => {
+  const { status } = req.query;
+  try {
+    let alerts;
+    if (status === 'active') {
+      alerts = stmtQueryAlerts.all();
+    } else {
+      alerts = db.prepare(`
+        SELECT a.id, a.device_id, a.created_at, a.resolved_at, a.resolved_by,
+          i.status, i.inspector, i.note, i.created_at as triggered_at
+        FROM alerts a
+        JOIN inspections i ON i.id = a.triggered_inspection_id
+        ORDER BY a.created_at DESC
+      `).all();
+    }
+    res.json({ alerts });
+  } catch (err) {
+    console.error('Alerts query error:', err.message);
+    res.status(500).json({ error: 'internal_error', message: '服务器内部错误，请重试' });
+  }
+});
+
+// POST /api/alerts/:id/resolve — mark an alert as resolved
+app.post('/api/alerts/:id/resolve', (req, res) => {
+  const id = parseInt(req.params.id);
+  const { resolved_by } = req.body;
+
+  if (!resolved_by || typeof resolved_by !== 'string' || !resolved_by.trim()) {
+    return res.status(400).json({
+      error: 'invalid_field',
+      field: 'resolved_by',
+      message: '解除人姓名不能为空'
+    });
+  }
+
+  try {
+    const result = stmtResolveAlert.run(resolved_by.trim(), id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'not_found', message: '告警记录不存在或已解除' });
+    }
+    const row = db.prepare('SELECT id, device_id, resolved_at FROM alerts WHERE id = ?').get(id);
+    res.json(row);
+  } catch (err) {
+    console.error('Resolve alert error:', err.message);
+    res.status(500).json({ error: 'internal_error', message: '服务器内部错误，请重试' });
   }
 });
 

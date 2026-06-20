@@ -134,6 +134,32 @@ body {
 .sync-indicator.pending { background: #f9ab00; animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
 
+/* ===== Alert Card ===== */
+.alert-card {
+  background: #fff0f0; border: 1px solid #f5c6cb; border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 16px;
+}
+.alert-card-title { font-weight: 600; color: #c62828; margin-bottom: 10px; font-size: .95rem; }
+.alert-card-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid #f5c6cb; font-size: .88rem; flex-wrap: wrap;
+}
+.alert-card-item:last-child { border-bottom: none; }
+.alert-card-device { font-weight: 600; color: #1a73e8; min-width: 90px; }
+.alert-resolve-btn {
+  margin-left: auto; padding: 4px 14px; font-size: .82rem; background: #e53935;
+  color: #fff; border: none; border-radius: 6px; cursor: pointer;
+  font-family: inherit; transition: background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.alert-resolve-btn:active { transform: scale(.97); }
+
+/* Record row alert highlight */
+.record-item.alert-device {
+  background: #fff0f0; border-left: 4px solid #e53935;
+  padding-left: 16px; border-radius: 0 6px 6px 0;
+}
+
 /* ===== Utility ===== */
 .hidden { display: none !important; }
 .mt-8 { margin-top: 8px; }
@@ -208,6 +234,10 @@ body {
           <input class="form-input" type="date" id="q-date-to" title="结束日期">
           <button class="btn btn-primary" id="btn-search">查询</button>
         </div>
+      </div>
+      <div id="alert-card" class="alert-card hidden">
+        <div class="alert-card-title">⚠️ 告警设备（连续两次异常）</div>
+        <div id="alert-list"></div>
       </div>
       <div id="sync-badge" class="text-center text-muted" style="margin-bottom:12px;display:none;"></div>
       <ul class="record-list" id="record-list"></ul>
@@ -599,7 +629,21 @@ async function searchHistory() {
   list.innerHTML = '';
 
   try {
-    const resp = await fetch(`${API_BASE}?${params.toString()}`);
+    const [resp, alertsResp] = await Promise.all([
+      fetch(`${API_BASE}?${params.toString()}`),
+      fetch('/api/alerts?status=active')
+    ]);
+
+    // Render alert card from alerts response
+    let alertDevices = new Set();
+    if (alertsResp.ok) {
+      const alertsData = await alertsResp.json();
+      renderAlertCard(alertsData.alerts);
+      alertsData.alerts.forEach(a => alertDevices.add(a.device_id));
+    } else {
+      renderAlertCard([]);
+    }
+
     if (!resp.ok) throw new Error('Server error');
     const data = await resp.json();
 
@@ -612,8 +656,9 @@ async function searchHistory() {
     empty.classList.add('hidden');
     data.records.forEach(r => {
       const sc = statusClass(r.status);
+      const isAlert = alertDevices.has(r.device_id);
       const li = document.createElement('li');
-      li.className = 'record-item';
+      li.className = 'record-item' + (isAlert ? ' alert-device' : '');
       li.innerHTML = `
         <div class="record-header">
           <span class="record-device">${escHtml(r.device_id)}</span>
@@ -644,6 +689,30 @@ function formatTime(iso) {
   } catch (e) {
     return iso;
   }
+}
+
+// ============================================================
+// Alert card rendering
+// ============================================================
+function renderAlertCard(alerts) {
+  const card = $('#alert-card');
+  const list = $('#alert-list');
+
+  if (!alerts || alerts.length === 0) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  card.classList.remove('hidden');
+  list.innerHTML = alerts.map(a => `
+    <div class="alert-card-item">
+      <span class="alert-card-device">${escHtml(a.device_id)}</span>
+      <span>${escHtml(a.inspector)}</span>
+      <span style="color:#888;font-size:.8rem;">触发: ${escHtml(formatTime(a.triggered_at))}</span>
+      ${a.note ? `<span style="color:#888;font-size:.82rem;">${escHtml(a.note)}</span>` : ''}
+      <button class="alert-resolve-btn" data-alert-id="${a.id}" data-device="${escHtml(a.device_id)}">解除</button>
+    </div>
+  `).join('');
 }
 
 // ============================================================
@@ -695,6 +764,40 @@ document.addEventListener('DOMContentLoaded', () => {
       showView('form');
     }
   }
+
+  // Alert resolve button delegation
+  $('#alert-list').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.alert-resolve-btn');
+    if (!btn) return;
+
+    const alertId = btn.dataset.alertId;
+    const deviceName = btn.dataset.device;
+    const name = prompt(`解除设备 ${deviceName} 的告警，请输入您的姓名：`);
+    if (!name || !name.trim()) return;
+
+    btn.disabled = true;
+    btn.textContent = '解除中...';
+
+    try {
+      const resp = await fetch(`/api/alerts/${alertId}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolved_by: name.trim() })
+      });
+      if (resp.ok) {
+        searchHistory(); // Refresh both alert card and record list
+      } else {
+        const err = await resp.json();
+        alert(err.message || '解除失败，请重试');
+        btn.disabled = false;
+        btn.textContent = '解除';
+      }
+    } catch (err) {
+      alert('网络错误：' + err.message);
+      btn.disabled = false;
+      btn.textContent = '解除';
+    }
+  });
 });
 </script>
 
