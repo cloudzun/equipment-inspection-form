@@ -683,12 +683,17 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#nav-history').addEventListener('click', (e) => { e.preventDefault(); showView('history'); });
   $('#btn-search').addEventListener('click', () => searchHistory());
 
-  // Restore view from hash
-  const hash = window.location.hash.replace('#', '');
-  if (hash === 'history') {
+  // Restore view from ?view= param first, then hash
+  const viewParam = getParam('view');
+  if (viewParam === 'history') {
     showView('history');
   } else {
-    showView('form');
+    const hash = window.location.hash.replace('#', '');
+    if (hash === 'history') {
+      showView('history');
+    } else {
+      showView('form');
+    }
   }
 });
 </script>
