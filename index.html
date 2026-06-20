@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>设备巡检登记</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #f5f5f5; color: #333; line-height: 1.6;
+  min-height: 100vh; min-height: 100dvh;
+}
+
+/* ===== Header ===== */
+.header {
+  background: #1a73e8; color: #fff; padding: 16px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,.15);
+}
+.header h1 { font-size: 1.15rem; font-weight: 600; }
+.header nav { display: flex; gap: 8px; }
+.header nav a {
+  color: rgba(255,255,255,.85); text-decoration: none; font-size: .9rem;
+  padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,.3);
+  transition: background .15s;
+}
+.header nav a:hover, .header nav a.active { background: rgba(255,255,255,.2); }
+
+/* ===== Main Container ===== */
+.main { max-width: 600px; margin: 20px auto; padding: 0 16px; }
+
+/* ===== Card ===== */
+.card {
+  background: #fff; border-radius: 12px; padding: 24px 20px;
+  margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+/* ===== Form ===== */
+.form-group { margin-bottom: 20px; }
+.form-group:last-child { margin-bottom: 0; }
+.form-label {
+  display: block; font-size: .92rem; font-weight: 600; color: #444;
+  margin-bottom: 6px;
+}
+.form-label .required { color: #e53935; margin-left: 2px; }
+.form-select, .form-input, .form-textarea {
+  width: 100%; padding: 12px 14px; font-size: 1rem;
+  border: 1.5px solid #ddd; border-radius: 8px;
+  background: #fff; color: #333;
+  transition: border-color .2s, box-shadow .2s;
+  -webkit-appearance: none; appearance: none;
+  font-family: inherit;
+}
+.form-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+.form-select:focus, .form-input:focus, .form-textarea:focus {
+  outline: none; border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,.15);
+}
+.form-select.error, .form-input.error, .form-textarea.error {
+  border-color: #e53935; box-shadow: 0 0 0 3px rgba(229,57,53,.12);
+}
+.form-error { color: #e53935; font-size: .82rem; margin-top: 4px; display: none; }
+.form-error.show { display: block; }
+.form-textarea { resize: vertical; min-height: 80px; }
+
+/* ===== Status Pills ===== */
+.status-pills { display: flex; gap: 10px; flex-wrap: wrap; }
+.status-pill {
+  flex: 1; min-width: 80px; padding: 12px 8px; text-align: center;
+  border: 2px solid #ddd; border-radius: 10px; font-size: .95rem;
+  cursor: pointer; transition: all .15s; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.status-pill:active { transform: scale(.97); }
+.status-pill.selected-ok { border-color: #34a853; background: #e8f5e9; color: #1b5e20; }
+.status-pill.selected-warn { border-color: #f9ab00; background: #fff8e1; color: #5d4037; }
+.status-pill.selected-error { border-color: #e53935; background: #ffebee; color: #b71c1c; }
+
+/* ===== Buttons ===== */
+.btn {
+  display: block; width: 100%; padding: 14px; font-size: 1.05rem; font-weight: 600;
+  border: none; border-radius: 10px; cursor: pointer; transition: all .15s;
+  font-family: inherit; -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(.98); }
+.btn-primary { background: #1a73e8; color: #fff; }
+.btn-primary:hover { background: #1557b0; }
+.btn-primary:disabled { background: #a8c7fa; cursor: not-allowed; transform: none; }
+
+/* ===== Toast / Confirmation ===== */
+.toast {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0);
+  background: rgba(0,0,0,.82); color: #fff; padding: 32px 40px; border-radius: 16px;
+  text-align: center; z-index: 100; transition: transform .25s cubic-bezier(.175,.885,.32,1.275);
+  pointer-events: none;
+}
+.toast.show { transform: translate(-50%,-50%) scale(1); }
+.toast .toast-icon { font-size: 3rem; display: block; margin-bottom: 8px; }
+.toast .toast-text { font-size: 1.1rem; }
+
+/* ===== History / Query ===== */
+.query-bar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.query-row { display: flex; gap: 8px; }
+.query-row .form-input, .query-row .form-select { flex: 1; }
+.query-row .btn { width: auto; flex-shrink: 0; padding: 12px 20px; font-size: .95rem; }
+.record-list { list-style: none; }
+.record-item {
+  border-bottom: 1px solid #eee; padding: 14px 0;
+}
+.record-item:last-child { border-bottom: none; }
+.record-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+}
+.record-device { font-weight: 600; font-size: .95rem; color: #1a73e8; }
+.record-time { font-size: .8rem; color: #999; }
+.record-detail { font-size: .9rem; color: #555; }
+.record-status {
+  display: inline-block; padding: 2px 10px; border-radius: 12px;
+  font-size: .82rem; font-weight: 600;
+}
+.record-status.ok { background: #e8f5e9; color: #1b5e20; }
+.record-status.warn { background: #fff8e1; color: #5d4037; }
+.record-status.error { background: #ffebee; color: #b71c1c; }
+.empty-state {
+  text-align: center; color: #999; padding: 48px 20px; font-size: .95rem;
+}
+.sync-indicator {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-left: 6px;
+}
+.sync-indicator.ok { background: #34a853; }
+.sync-indicator.pending { background: #f9ab00; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+/* ===== Utility ===== */
+.hidden { display: none !important; }
+.mt-8 { margin-top: 8px; }
+.text-center { text-align: center; }
+.text-muted { color: #888; font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<div class="header">
+  <h1>设备巡检登记</h1>
+  <nav>
+    <a href="#form" id="nav-form" class="active">填表</a>
+    <a href="#history" id="nav-history">查历史</a>
+  </nav>
+</div>
+
+<!-- ===== Main ===== -->
+<div class="main">
+
+  <!-- ========== FORM VIEW ========== -->
+  <div id="view-form">
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label" for="device_id">设备编号 <span class="required">*</span></label>
+        <select class="form-select" id="device_id" data-required>
+          <option value="">-- 请选择设备 --</option>
+        </select>
+        <div class="form-error" data-for="device_id">请选择设备编号</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">设备状态 <span class="required">*</span></label>
+        <div class="status-pills" id="status-group">
+          <div class="status-pill" data-value="正常" data-target="status">正常 ✅</div>
+          <div class="status-pill" data-value="异常" data-target="status">异常 ⚠️</div>
+          <div class="status-pill" data-value="待维修" data-target="status">待维修 ❌</div>
+        </div>
+        <div class="form-error" data-for="status">请选择设备状态</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="inspector">巡检人 <span class="required">*</span></label>
+        <input class="form-input" type="text" id="inspector" placeholder="请输入姓名" autocomplete="name" data-required>
+        <div class="form-error" data-for="inspector">请输入巡检人姓名</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="note">备注</label>
+        <textarea class="form-textarea" id="note" placeholder="选填，最多 1000 字" maxlength="1000"></textarea>
+      </div>
+
+      <button class="btn btn-primary" id="btn-submit">提交巡检记录</button>
+      <div class="text-center mt-8 text-muted" id="submit-hint" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- ========== HISTORY VIEW ========== -->
+  <div id="view-history" class="hidden">
+    <div class="card">
+      <div class="query-bar">
+        <div class="query-row">
+          <select class="form-select" id="q-device" style="flex:2;">
+            <option value="">全部设备</option>
+          </select>
+          <input class="form-input" type="text" id="q-inspector" placeholder="巡检人" style="flex:1;">
+        </div>
+        <div class="query-row">
+          <input class="form-input" type="date" id="q-date-from" title="起始日期">
+          <span style="align-self:center;color:#888;">至</span>
+          <input class="form-input" type="date" id="q-date-to" title="结束日期">
+          <button class="btn btn-primary" id="btn-search">查询</button>
+        </div>
+      </div>
+      <div id="sync-badge" class="text-center text-muted" style="margin-bottom:12px;display:none;"></div>
+      <ul class="record-list" id="record-list"></ul>
+      <div class="empty-state hidden" id="empty-history">暂无记录</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast" id="toast">
+  <span class="toast-icon" id="toast-icon"></span>
+  <span class="toast-text" id="toast-text"></span>
+</div>
+
+<script>
+// ============================================================
+// DEVICE LIST (must match server.js DEVICE_LIST)
+// ============================================================
+const DEVICE_LIST = [
+  'shadds-01', 'shadds-02', 'shadds-03', 'shadds-04', 'shadds-05',
+  'shadds-06', 'shadds-07', 'shadds-08', 'shadds-09', 'shadds-10',
+  'shadds-11', 'shadds-12', 'shadds-13', 'shadds-14', 'shadds-15',
+  'shadds-16', 'shadds-17', 'shadds-18', 'shadds-19', 'shadds-20'
+];
+
+const VALID_STATUSES = ['正常', '异常', '待维修'];
+const API_BASE = '/api/inspections';
+
+// ============================================================
+// IndexedDB
+// ============================================================
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('inspections', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('records')) {
+        const store = db.createObjectStore('records', { keyPath: 'id', autoIncrement: true });
+        store.createIndex('device_id', 'device_id', { unique: false });
+        store.createIndex('synced', 'synced', { unique: false });
+        store.createIndex('client_created_at', 'client_created_at', { unique: false });
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbPut(record) {
+  return openDB().then(db => {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('records', 'readwrite');
+      tx.objectStore('records').add(record);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = (e) => { db.close(); reject(e.target.error); };
+    });
+  });
+}
+
+function dbUpdate(id, changes) {
+  return openDB().then(db => {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('records', 'readwrite');
+      const store = tx.objectStore('records');
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const record = getReq.result;
+        if (!record) { db.close(); return reject(new Error('record not found')); }
+        Object.assign(record, changes);
+        store.put(record);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = (e) => { db.close(); reject(e.target.error); };
+      };
+      getReq.onerror = (e) => { db.close(); reject(e.target.error); };
+    });
+  });
+}
+
+function dbGetUnsynced() {
+  return openDB().then(db => {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('records', 'readonly');
+      const index = tx.objectStore('records').index('synced');
+      const req = index.getAll(IDBKeyRange.only(0)); // synced === 0 (false)
+      req.onsuccess = () => { db.close(); resolve(req.result); };
+      req.onerror = (e) => { db.close(); reject(e.target.error); };
+    });
+  });
+}
+
+function dbGetAll() {
+  return openDB().then(db => {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('records', 'readonly');
+      const req = tx.objectStore('records').getAll();
+      req.onsuccess = () => { db.close(); resolve(req.result); };
+      req.onerror = (e) => { db.close(); reject(e.target.error); };
+    });
+  });
+}
+
+// ============================================================
+// DOM helpers
+// ============================================================
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+// Populate device dropdowns
+function populateDeviceDropdowns() {
+  const selects = [document.getElementById('device_id'), document.getElementById('q-device')];
+  selects.forEach(sel => {
+    if (!sel) return;
+    // Keep first "please select" / "all" option, rebuild the rest
+    const firstOpt = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(firstOpt);
+    DEVICE_LIST.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = d;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+// Parse URL params
+function getParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+// Escape HTML (XSS prevention)
+function escHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Toast
+function showToast(icon, text) {
+  const toast = $('#toast');
+  $('#toast-icon').textContent = icon;
+  $('#toast-text').textContent = text;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// Status pill visual class
+function statusClass(status) {
+  if (status === '正常') return 'ok';
+  if (status === '异常') return 'warn';
+  if (status === '待维修') return 'error';
+  return '';
+}
+
+// ============================================================
+// Form logic
+// ============================================================
+let selectedStatus = '';
+
+function initForm() {
+  // Pre-fill device from URL param
+  const deviceParam = getParam('device');
+  if (deviceParam && DEVICE_LIST.includes(deviceParam)) {
+    $('#device_id').value = deviceParam;
+  }
+
+  // Status pills
+  $$('.status-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const target = pill.dataset.target;
+      // Clear all pills in group
+      $$(`.status-pill[data-target="${target}"]`).forEach(p => {
+        p.classList.remove('selected-ok', 'selected-warn', 'selected-error');
+      });
+      // Highlight selected
+      if (pill.dataset.value === '正常') pill.classList.add('selected-ok');
+      else if (pill.dataset.value === '异常') pill.classList.add('selected-warn');
+      else pill.classList.add('selected-error');
+      selectedStatus = pill.dataset.value;
+      // Clear inline error
+      hideError('status');
+    });
+  });
+
+  // Clear errors on input
+  $$('[data-required]').forEach(el => {
+    el.addEventListener('input', () => hideError(el.id));
+    el.addEventListener('change', () => hideError(el.id));
+  });
+
+  // Submit
+  $('#btn-submit').addEventListener('click', handleSubmit);
+}
+
+function showError(fieldId) {
+  const input = document.getElementById(fieldId);
+  const error = document.querySelector(`[data-for="${fieldId}"]`);
+  if (input) input.classList.add('error');
+  if (error) error.classList.add('show');
+}
+
+function hideError(fieldId) {
+  const input = document.getElementById(fieldId);
+  const error = document.querySelector(`[data-for="${fieldId}"]`);
+  if (input) input.classList.remove('error');
+  if (error) error.classList.remove('show');
+}
+
+function clearErrors() {
+  $$('.form-error').forEach(e => e.classList.remove('show'));
+  $$('.form-select.error, .form-input.error, .form-textarea.error').forEach(e => e.classList.remove('error'));
+}
+
+async function handleSubmit() {
+  clearErrors();
+
+  const deviceId = $('#device_id').value;
+  const inspector = $('#inspector').value;
+  const note = $('#note').value;
+
+  let valid = true;
+
+  if (!deviceId || !DEVICE_LIST.includes(deviceId)) {
+    showError('device_id');
+    valid = false;
+  }
+  if (!VALID_STATUSES.includes(selectedStatus)) {
+    showError('status');
+    valid = false;
+  }
+  if (!inspector || !inspector.trim()) {
+    showError('inspector');
+    valid = false;
+  }
+
+  if (!valid) return;
+
+  const btn = $('#btn-submit');
+  btn.disabled = true;
+  btn.textContent = '提交中...';
+
+  const clientCreatedAt = new Date().toISOString();
+
+  // 1. Write to IndexedDB (synced: false)
+  let localId;
+  try {
+    localId = await dbPut({
+      device_id: deviceId,
+      status: selectedStatus,
+      inspector: inspector.trim(),
+      note: note.slice(0, 1000),
+      client_created_at: clientCreatedAt,
+      synced: 0
+    });
+  } catch (err) {
+    console.error('IndexedDB write error:', err);
+  }
+
+  // 2. POST to server
+  try {
+    const resp = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: deviceId,
+        status: selectedStatus,
+        inspector: inspector.trim(),
+        note: note.slice(0, 1000),
+        client_created_at: clientCreatedAt
+      })
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      // Mark synced
+      if (localId !== undefined) {
+        try {
+          await dbUpdate(localId, { synced: 1, server_created_at: data.created_at });
+        } catch (e) { /* non-critical */ }
+      }
+      showToast('✅', '已提交');
+    } else {
+      showToast('⏳', '已保存，等待同步');
+    }
+  } catch (err) {
+    // Network error — record stays in IndexedDB with synced=0
+    console.log('Sync postponed:', err.message);
+    showToast('⏳', '已保存，等待同步');
+  }
+
+  // 3. Reset form after delay
+  setTimeout(() => {
+    $('#device_id').value = getParam('device') && DEVICE_LIST.includes(getParam('device')) ? getParam('device') : '';
+    selectedStatus = '';
+    $$('.status-pill').forEach(p => {
+      p.classList.remove('selected-ok', 'selected-warn', 'selected-error');
+    });
+    $('#inspector').value = '';
+    $('#note').value = '';
+    btn.disabled = false;
+    btn.textContent = '提交巡检记录';
+  }, 2000);
+}
+
+// ============================================================
+// Retry unsynced records on page load
+// ============================================================
+async function retryUnsynced() {
+  let unsynced;
+  try {
+    unsynced = await dbGetUnsynced();
+  } catch (e) {
+    return; // IndexedDB not available
+  }
+
+  if (!unsynced || unsynced.length === 0) return;
+
+  // Dedupe: skip records where same client_created_at + device_id + inspector already synced
+  const allRecords = await dbGetAll();
+  const syncedKeys = new Set(
+    allRecords
+      .filter(r => r.synced === 1)
+      .map(r => `${r.client_created_at}|${r.device_id}|${r.inspector}`)
+  );
+
+  for (const record of unsynced) {
+    const key = `${record.client_created_at}|${record.device_id}|${record.inspector}`;
+    if (syncedKeys.has(key)) {
+      // Already synced by another device, mark as synced
+      try { await dbUpdate(record.id, { synced: 1 }); } catch(e) {}
+      continue;
+    }
+
+    try {
+      const resp = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_id: record.device_id,
+          status: record.status,
+          inspector: record.inspector,
+          note: record.note,
+          client_created_at: record.client_created_at
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        try { await dbUpdate(record.id, { synced: 1, server_created_at: data.created_at }); } catch(e) {}
+      }
+    } catch (e) {
+      // Still offline, stop retrying
+      break;
+    }
+  }
+
+  // Show sync status
+  const remaining = (await dbGetUnsynced()).length;
+  const badge = $('#sync-badge');
+  if (badge && remaining > 0) {
+    badge.style.display = 'block';
+    badge.innerHTML = `<span class="sync-indicator pending"></span> ${remaining} 条记录等待同步`;
+  } else if (badge && remaining === 0 && unsynced.length > 0) {
+    badge.style.display = 'block';
+    badge.innerHTML = `<span class="sync-indicator ok"></span> 全部已同步`;
+    setTimeout(() => { badge.style.display = 'none'; }, 3000);
+  }
+}
+
+// ============================================================
+// History logic
+// ============================================================
+async function searchHistory() {
+  const params = new URLSearchParams();
+  const device = $('#q-device').value;
+  const inspector = $('#q-inspector').value.trim();
+  const dateFrom = $('#q-date-from').value;
+  const dateTo = $('#q-date-to').value;
+
+  if (device) params.set('device_id', device);
+  if (inspector) params.set('inspector', inspector);
+  if (dateFrom) params.set('date_from', dateFrom + 'T00:00:00');
+  if (dateTo) params.set('date_to', dateTo + 'T23:59:59');
+  params.set('limit', '200');
+
+  const list = $('#record-list');
+  const empty = $('#empty-history');
+  list.innerHTML = '';
+
+  try {
+    const resp = await fetch(`${API_BASE}?${params.toString()}`);
+    if (!resp.ok) throw new Error('Server error');
+    const data = await resp.json();
+
+    if (data.records.length === 0) {
+      empty.classList.remove('hidden');
+      list.innerHTML = '';
+      return;
+    }
+
+    empty.classList.add('hidden');
+    data.records.forEach(r => {
+      const sc = statusClass(r.status);
+      const li = document.createElement('li');
+      li.className = 'record-item';
+      li.innerHTML = `
+        <div class="record-header">
+          <span class="record-device">${escHtml(r.device_id)}</span>
+          <span class="record-time">${escHtml(formatTime(r.created_at))}</span>
+        </div>
+        <div class="record-detail">
+          <span class="record-status ${sc}">${escHtml(r.status)}</span>
+          &nbsp;${escHtml(r.inspector)}${r.note ? ' · ' + escHtml(r.note) : ''}
+        </div>
+      `;
+      list.appendChild(li);
+    });
+  } catch (err) {
+    empty.classList.remove('hidden');
+    empty.textContent = '查询失败：' + err.message;
+  }
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  // Handle SQLite datetime format or ISO
+  try {
+    const d = new Date(iso.replace(' ', 'T') + (iso.includes('+') ? '' : '+08:00'));
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch (e) {
+    return iso;
+  }
+}
+
+// ============================================================
+// Navigation
+// ============================================================
+function showView(view) {
+  $('#view-form').classList.toggle('hidden', view !== 'form');
+  $('#view-history').classList.toggle('hidden', view !== 'history');
+  $('#nav-form').classList.toggle('active', view === 'form');
+  $('#nav-history').classList.toggle('active', view === 'history');
+
+  if (view === 'history') {
+    searchHistory();
+    // Show unsynced count
+    dbGetUnsynced().then(u => {
+      const badge = $('#sync-badge');
+      if (badge && u.length > 0) {
+        badge.style.display = 'block';
+        badge.innerHTML = `<span class="sync-indicator pending"></span> ${u.length} 条记录等待同步`;
+      }
+    }).catch(() => {});
+  }
+
+  window.location.hash = view;
+}
+
+// ============================================================
+// Init
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  populateDeviceDropdowns();
+  initForm();
+  retryUnsynced();
+
+  // Navigation
+  $('#nav-form').addEventListener('click', (e) => { e.preventDefault(); showView('form'); });
+  $('#nav-history').addEventListener('click', (e) => { e.preventDefault(); showView('history'); });
+  $('#btn-search').addEventListener('click', () => searchHistory());
+
+  // Restore view from hash
+  const hash = window.location.hash.replace('#', '');
+  if (hash === 'history') {
+    showView('history');
+  } else {
+    showView('form');
+  }
+});
+</script>
+
+</body>
+</html>
