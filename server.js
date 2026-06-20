@@ -294,6 +294,55 @@ app.get('/api/inspections', (req, res) => {
   }
 });
 
+// GET /api/alerts — list alerts, optional ?status=active for unresolved
+app.get('/api/alerts', (req, res) => {
+  const { status } = req.query;
+  try {
+    let alerts;
+    if (status === 'active') {
+      alerts = stmtQueryAlerts.all();
+    } else {
+      alerts = db.prepare(`
+        SELECT a.id, a.device_id, a.created_at, a.resolved_at, a.resolved_by,
+          i.status, i.inspector, i.note, i.created_at as triggered_at
+        FROM alerts a
+        JOIN inspections i ON i.id = a.triggered_inspection_id
+        ORDER BY a.created_at DESC
+      `).all();
+    }
+    res.json({ alerts });
+  } catch (err) {
+    console.error('Alerts query error:', err.message);
+    res.status(500).json({ error: 'internal_error', message: '服务器内部错误，请重试' });
+  }
+});
+
+// POST /api/alerts/:id/resolve — mark an alert as resolved
+app.post('/api/alerts/:id/resolve', (req, res) => {
+  const id = parseInt(req.params.id);
+  const { resolved_by } = req.body;
+
+  if (!resolved_by || typeof resolved_by !== 'string' || !resolved_by.trim()) {
+    return res.status(400).json({
+      error: 'invalid_field',
+      field: 'resolved_by',
+      message: '解除人姓名不能为空'
+    });
+  }
+
+  try {
+    const result = stmtResolveAlert.run(resolved_by.trim(), id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'not_found', message: '告警记录不存在或已解除' });
+    }
+    const row = db.prepare('SELECT id, device_id, resolved_at FROM alerts WHERE id = ?').get(id);
+    res.json(row);
+  } catch (err) {
+    console.error('Resolve alert error:', err.message);
+    res.status(500).json({ error: 'internal_error', message: '服务器内部错误，请重试' });
+  }
+});
+
 // Serve static files — ONLY index.html, not server source
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
