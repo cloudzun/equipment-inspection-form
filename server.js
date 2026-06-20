@@ -39,6 +39,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_inspections_inspector ON inspections(inspector);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_inspections_dedup
     ON inspections(device_id, inspector, client_created_at);
+
+  CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id TEXT NOT NULL,
+    triggered_inspection_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at TEXT,
+    resolved_by TEXT,
+    FOREIGN KEY (triggered_inspection_id) REFERENCES inspections(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_alerts_device ON alerts(device_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_active ON alerts(device_id) WHERE resolved_at IS NULL;
 `);
 
 console.log('SQLite WAL mode ready, schema ensured.');
@@ -66,6 +78,38 @@ const stmtQueryDevice = db.prepare(`
 
 const stmtQueryCount = db.prepare('SELECT COUNT(*) as total FROM inspections');
 const stmtQueryCountDevice = db.prepare('SELECT COUNT(*) as total FROM inspections WHERE device_id = ?');
+
+// --- Alert prepared statements ---
+const stmtCheckConsecutive = db.prepare(`
+  WITH ranked AS (
+    SELECT id, device_id, status,
+      ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY created_at DESC) as rn
+    FROM inspections
+    WHERE device_id = ?
+  )
+  SELECT * FROM ranked WHERE rn <= 2
+`);
+
+const stmtCheckActiveAlert = db.prepare(`
+  SELECT id FROM alerts WHERE device_id = ? AND resolved_at IS NULL
+`);
+
+const stmtInsertAlert = db.prepare(`
+  INSERT INTO alerts (device_id, triggered_inspection_id) VALUES (?, ?)
+`);
+
+const stmtQueryAlerts = db.prepare(`
+  SELECT a.id, a.device_id, a.created_at,
+    i.status, i.inspector, i.note, i.created_at as triggered_at
+  FROM alerts a
+  JOIN inspections i ON i.id = a.triggered_inspection_id
+  WHERE a.resolved_at IS NULL
+  ORDER BY a.created_at DESC
+`);
+
+const stmtResolveAlert = db.prepare(`
+  UPDATE alerts SET resolved_at = datetime('now'), resolved_by = ? WHERE id = ?
+`);
 
 // --- Express app ---
 const app = express();
