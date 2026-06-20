@@ -213,6 +213,16 @@ if (!inspector || typeof inspector !== 'string' || !inspector.trim() || !inspect
 
     const row = db.prepare('SELECT id, created_at FROM inspections WHERE id = ?').get(result.lastInsertRowid);
 
+    // Auto-trigger alert: check if last 2 inspections for this device are both "异常"
+    const recentTwo = stmtCheckConsecutive.all(device_id);
+    if (recentTwo.length === 2 && recentTwo.every(r => r.status === '异常')) {
+      const existingAlert = stmtCheckActiveAlert.get(device_id);
+      if (!existingAlert) {
+        // recentTwo[0] has rn=1, which is the most recent (just inserted)
+        stmtInsertAlert.run(device_id, recentTwo[0].id);
+      }
+    }
+
     res.status(201).json({
       id: row.id,
       created_at: row.created_at
