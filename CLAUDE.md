@@ -85,6 +85,21 @@ Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
 - QA 报告：`.gstack/qa-reports/qa-report-localhost-2026-06-20.md`
 - 评审日志：`gstack-review-read` 可查 6 条记录
 
+## Deployment
+
+部署到车间 Windows 服务器：
+
+```bash
+git clone https://github.com/cloudzun/equipment-inspection-form.git
+cd equipment-inspection-form
+npm install
+node server.js
+```
+
+然后生成二维码贴到设备上（每台设备的 URL: `http://服务器IP:3000/?device=设备编号`）。
+
+待确认：车间真实设备编号列表（替换当前示例的 shadds-01~20）。
+
 ## Spec
 
 2026-06-20: /spec — 14/14 quality standards passed
