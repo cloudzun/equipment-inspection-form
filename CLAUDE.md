@@ -92,6 +92,8 @@ Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
 内容: 完整 schema (SQL DDL), API contract (POST/GET), 表单验证规则, 安全措施,
 11 条验收标准, 测试计划, 部署步骤, Out of Scope 列表
 
+2026-06-20: /document-release — 新建 README.md（项目简介、部署、用法、架构、安全）
+
 ## Design Doc
 
 2026-06-20: /office-hours — 设计文档 + /autoplan 追加评审报告
