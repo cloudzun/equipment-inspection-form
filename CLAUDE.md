@@ -22,6 +22,27 @@ Using gstack skills: After install, skills like /qa, /ship, /review, /investigat
 and /browse are available. Use /browse for all web browsing.
 Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
 
+## Write Targets — 技能 → 写入位置 映射
+
+| 技能 | 写入目标 | 写入内容 |
+|------|---------|---------|
+| /office-hours | ~/.gstack/projects/SLUG/*-design-*.md | Design doc (problem, premises, approaches) |
+| /autoplan | ~/.gstack/projects/SLUG/*-design-*.md (追加) | Audit trail + architecture updates + review report |
+| | ~/.gstack/projects/SLUG/*-reviews.jsonl | Structured review logs (gstack-review-log) |
+| /spec | ~/.gstack/projects/SLUG/specs/*.md | Spec archive (schema, API, acceptance criteria) |
+| /review | Source code | Security/bug fixes (committed) |
+| | ~/.gstack/projects/SLUG/*-reviews.jsonl | Review log with findings + fix actions |
+| | CLAUDE.md | Session summary |
+| /qa | .gstack/qa-reports/ | QA report + baseline.json + screenshots |
+| | ~/.gstack/projects/SLUG/*-test-*.md | Project-scoped test outcome |
+| | ~/.gstack/projects/SLUG/*-reviews.jsonl | QA log entry |
+| | Source code | Bug fixes (committed) |
+| | CLAUDE.md | Session summary |
+
+**Key Commands:**
+- `gstack-review-read` — 读取所有评审记录
+- `ls .gstack/qa-reports/` — 查看 QA 报告和截图
+
 ## Review & QA Logs
 
 2026-06-20:
