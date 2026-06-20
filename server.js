@@ -6,7 +6,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 
 // --- Device whitelist (must match index.html DEVICE_LIST) ---
 const DEVICE_LIST = [
