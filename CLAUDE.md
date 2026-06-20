@@ -22,6 +22,21 @@ Using gstack skills: After install, skills like /qa, /ship, /review, /investigat
 and /browse are available. Use /browse for all web browsing.
 Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
 
+## Review & QA Logs
+
+2026-06-20:
+- /autoplan — CEO review (5 findings) + Eng review (13 findings). Design doc updated with audit trail + review report.
+- /review — 18 adversarial findings, 12 fixed. Files: server.js, index.html, .gitignore
+- /qa — health score 92/100, core flows verified, ISSUE-001 (?view=history routing) fixed
+
+## Spec
+
+2026-06-20: /spec - 14/14 quality standards passed. Spec archived at ~/.gstack/projects/equipment-inspection-form/specs/
+
+## Design Doc
+
+2026-06-20: /office-hours → design doc at ~/.gstack/projects/equipment-inspection-form/cheng-master-design-20260620-090909.md
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
