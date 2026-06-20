@@ -452,14 +452,14 @@ async function handleSubmit() {
 
   const clientCreatedAt = new Date().toISOString();
 
-  // 1. Write to IndexedDB (synced: false)
+  // 1. Write to IndexedDB (synced: false) — await before fetch to avoid race
   let localId;
   try {
     localId = await dbPut({
       device_id: deviceId,
       status: selectedStatus,
       inspector: inspector.trim(),
-      note: note.slice(0, 1000),
+      note: [...note].slice(0, 1000).join(''),
       client_created_at: clientCreatedAt,
       synced: 0
     });
@@ -476,7 +476,7 @@ async function handleSubmit() {
         device_id: deviceId,
         status: selectedStatus,
         inspector: inspector.trim(),
-        note: note.slice(0, 1000),
+        note: [...note].slice(0, 1000).join(''),
         client_created_at: clientCreatedAt
       })
     });
@@ -526,16 +526,16 @@ async function retryUnsynced() {
 
   if (!unsynced || unsynced.length === 0) return;
 
-  // Dedupe: skip records where same client_created_at + device_id + inspector already synced
+  // Dedupe: skip records where same client_created_at + device_id + inspector + status already synced
   const allRecords = await dbGetAll();
   const syncedKeys = new Set(
     allRecords
       .filter(r => r.synced === 1)
-      .map(r => `${r.client_created_at}|${r.device_id}|${r.inspector}`)
+      .map(r => `${r.client_created_at}|${r.device_id}|${r.inspector}|${r.status}`)
   );
 
   for (const record of unsynced) {
-    const key = `${record.client_created_at}|${record.device_id}|${record.inspector}`;
+    const key = `${record.client_created_at}|${record.device_id}|${record.inspector}|${record.status}`;
     if (syncedKeys.has(key)) {
       // Already synced by another device, mark as synced
       try { await dbUpdate(record.id, { synced: 1 }); } catch(e) {}
@@ -559,8 +559,9 @@ async function retryUnsynced() {
         try { await dbUpdate(record.id, { synced: 1, server_created_at: data.created_at }); } catch(e) {}
       }
     } catch (e) {
-      // Still offline, stop retrying
-      break;
+      // Network error — continue to next record, don't abort the whole batch
+      console.log('Retry failed for record', record.id, e.message);
+      continue;
     }
   }
 
@@ -633,9 +634,8 @@ async function searchHistory() {
 
 function formatTime(iso) {
   if (!iso) return '';
-  // Handle SQLite datetime format or ISO
   try {
-    const d = new Date(iso.replace(' ', 'T') + (iso.includes('+') ? '' : '+08:00'));
+    const d = new Date(iso.replace(' ', 'T') + (iso.includes('+') || iso.includes('Z') ? '' : '+08:00'));
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleString('zh-CN', {
       year: 'numeric', month: '2-digit', day: '2-digit',

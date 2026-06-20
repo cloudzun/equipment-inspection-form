@@ -6,7 +6,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || '127.0.0.1';
 
 // --- Device whitelist (must match index.html DEVICE_LIST) ---
 const DEVICE_LIST = [
@@ -37,6 +37,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_inspections_device ON inspections(device_id);
   CREATE INDEX IF NOT EXISTS idx_inspections_created ON inspections(created_at);
   CREATE INDEX IF NOT EXISTS idx_inspections_inspector ON inspections(inspector);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_inspections_dedup
+    ON inspections(device_id, inspector, client_created_at);
 `);
 
 console.log('SQLite WAL mode ready, schema ensured.');
@@ -71,16 +73,43 @@ const app = express();
 // Body parser: only accept JSON
 app.use(express.json({ limit: '16kb' }));
 
-// CORS: restrict to local origins (browsers on the intranet)
+// CORS: restrictive by default — only serve requests from the same server
+// or from localhost. For intranet deployment, set ALLOWED_ORIGINS env.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean);
 app.use((req, res, next) => {
-  res.set('Access-Control-Allow-Origin', req.get('origin') || '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  const origin = req.get('origin');
+  // If no origin header (same-origin request, curl, etc.), allow it
+  if (!origin) return next();
+  // If allowed origins configured, check against them
+  if (ALLOWED_ORIGINS.length > 0) {
+    const allowed = ALLOWED_ORIGINS.includes(origin);
+    if (allowed) {
+      res.set('Access-Control-Allow-Origin', origin);
+      res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.set('Access-Control-Allow-Headers', 'Content-Type');
+    }
+    // Otherwise: no CORS headers (default deny for cross-origin)
+  } else {
+    // No explicit allowlist: allow same-origin only by not setting CORS headers
+  }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
-// --- API routes ---
+// --- Rate limiting ---
+const reqCounts = new Map();
+setInterval(() => reqCounts.clear(), 60000); // Reset every 60s
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    const key = req.ip || req.socket.remoteAddress || 'unknown';
+    const count = (reqCounts.get(key) || 0) + 1;
+    reqCounts.set(key, count);
+    if (count > 100) {
+      return res.status(429).json({ error: 'rate_limited', message: '请求过于频繁，请稍后再试' });
+    }
+  }
+  next();
+});
 
 // POST /api/inspections — submit a new inspection record
 app.post('/api/inspections', (req, res) => {
@@ -104,17 +133,18 @@ app.post('/api/inspections', (req, res) => {
     });
   }
 
-  // Validate inspector
-  if (!inspector || typeof inspector !== 'string' || !inspector.trim()) {
+  // Validate inspector (max 50 chars)
+  const inspectValidator = /^\p{L}{1,50}$/u;
+if (!inspector || typeof inspector !== 'string' || !inspector.trim() || !inspectValidator.test(inspector.trim())) {
     return res.status(400).json({
       error: 'invalid_field',
       field: 'inspector',
-      message: '巡检人姓名不能为空'
+      message: '巡检人姓名不能为空，仅支持中文或字母，不超过50个字符'
     });
   }
 
-  // Validate note length
-  const safeNote = (typeof note === 'string') ? note.slice(0, 1000) : '';
+  // Validate note length (count Unicode codepoints, not UTF-16 units)
+  const safeNote = (typeof note === 'string') ? [...note].slice(0, 1000).join('') : '';
 
   // Validate client_created_at
   if (!client_created_at) {
@@ -210,8 +240,13 @@ app.get('/api/inspections', (req, res) => {
   }
 });
 
-// Serve static files (index.html)
-app.use(express.static(path.join(__dirname)));
+// Serve static files — ONLY index.html, not server source
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+app.get('/index.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Graceful shutdown
 process.on('SIGINT', () => {
